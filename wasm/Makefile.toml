@@ -1,0 +1,39 @@
+[config]
+skip_core_tasks = true
+
+[env.development]
+PROFILE_ARG = "--dev"
+
+[env.production]
+PROFILE_ARG = "--release"
+
+
+[tasks.build]
+description = "compile projs"
+workspace = false
+
+script_runner = '@duckscript'
+script = '''
+members = split ${CARGO_MAKE_CRATE_WORKSPACE_MEMBERS} ,
+
+for arg in ${@}
+    echo "arg: ${arg}"
+end
+
+
+if array_is_empty ${@}
+    targets = set ${members}
+else
+    targets = set ${@}
+end
+
+for target in ${targets}
+    echo "Building ${target}"
+
+    spawn --input a wasm-pack build --target web ${PROFILE_ARG} -d ../pkg ${target}
+end
+
+release ${members}
+release ${targets}
+'''
+
