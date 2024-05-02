@@ -17,10 +17,11 @@
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "noFallthroughCasesInSwitch": true
+    "noFallthroughCasesInSwitch": true,
+    "baseUrl": ".",
+    "paths": {
+      "wasm/*": ["wasm/pkg/*"]
+    },
   },
   "include": ["src", "wasm/pkg"],
-  "paths": {
-    "wasm/*": ["wasm/pkg/*"]
-  },
 }

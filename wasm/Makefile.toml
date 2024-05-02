@@ -30,7 +30,7 @@ end
 for target in ${targets}
     echo "Building ${target}"
 
-    spawn --input a wasm-pack build --target web ${PROFILE_ARG} -d ../pkg ${target}
+    exec wasm-pack build --target web ${PROFILE_ARG} -d ../pkg ${target}
 end
 
 release ${members}
