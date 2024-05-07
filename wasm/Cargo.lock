@@ -36,6 +36,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 
 [[package]]
+name = "common"
+version = "0.1.0"
+dependencies = [
+ "console_error_panic_hook",
+ "js-sys",
+ "nalgebra-glm",
+ "wasm-bindgen",
+ "web-sys",
+]
+
+[[package]]
 name = "console_error_panic_hook"
 version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -64,6 +75,18 @@ checksum = "90ed8c1e510134f979dbc4f070f87d4313098b704861a105fe34231c70a3901c"
 name = "m0_demo"
 version = "0.1.0"
 dependencies = [
+ "console_error_panic_hook",
+ "js-sys",
+ "nalgebra-glm",
+ "wasm-bindgen",
+ "web-sys",
+]
+
+[[package]]
+name = "m1_spline"
+version = "0.1.0"
+dependencies = [
+ "common",
  "console_error_panic_hook",
  "js-sys",
  "nalgebra-glm",

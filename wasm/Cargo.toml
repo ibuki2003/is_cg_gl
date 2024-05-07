@@ -5,7 +5,9 @@
 
 [workspace]
 members = [
+    "common",
   "m0_demo",
+    "m1_spline",
 ]
 resolver = "2"
 
@@ -26,4 +28,5 @@ web-sys = { version = "0.3.69", features = [
     "WebGlBuffer",
     "WebGlVertexArrayObject",
     "WebGlUniformLocation",
+    "console",
 ] }
