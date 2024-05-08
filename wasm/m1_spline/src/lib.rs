@@ -1,25 +1,22 @@
+use common::vao::MyVAO;
 use glm::Vec2;
 use nalgebra_glm as glm;
-
 use std::{cell::RefCell, rc::Rc};
 use wasm_bindgen::{prelude::*, JsCast};
 use web_sys::{WebGl2RenderingContext as GL, *};
 
 struct Scene {
-    gl: GL,
+    gl: Rc<GL>,
     program: WebGlProgram,
 
-    vao: WebGlVertexArrayObject,
-    vbo_vtx: WebGlBuffer,
-    vbo_col: WebGlBuffer,
-    ibo_lin: WebGlBuffer,
-    ibo_tri: WebGlBuffer,
+    vao_lin: MyVAO,
+    vao_tri: MyVAO,
 
     mvp_location: WebGlUniformLocation,
 
-    index_count: i32,
-
     points: Vec<Vec2>,
+
+    splitnum: usize,
 }
 
 const MAX_POINTS: usize = 1024;
@@ -31,6 +28,7 @@ impl Scene {
             .get_context("webgl2")?
             .ok_or("Failed to get WebGl2RenderingContext")?
             .dyn_into::<GL>()?;
+        let gl = Rc::new(gl);
 
         let program = common::create_program(
             &gl,
@@ -42,48 +40,8 @@ impl Scene {
         gl.depth_func(GL::LEQUAL);
         gl.enable(GL::CULL_FACE);
 
-        let vao = gl
-            .create_vertex_array()
-            .ok_or("Failed to create vertex array object")?;
-        gl.bind_vertex_array(Some(&vao));
-
-        for i in 0..2 {
-            gl.enable_vertex_attrib_array(i);
-        }
-
-        let vbo_vtx = gl.create_buffer().ok_or("Failed to create buffer")?;
-        gl.bind_buffer(GL::ARRAY_BUFFER, Some(&vbo_vtx));
-        gl.buffer_data_with_i32(
-            GL::ARRAY_BUFFER,
-            4 * MAX_POINTS as i32 * 3,
-            GL::DYNAMIC_DRAW,
-        );
-        gl.vertex_attrib_pointer_with_i32(0, 3, GL::FLOAT, false, 0, 0);
-
-        let vbo_col = gl.create_buffer().ok_or("Failed to create buffer")?;
-        gl.bind_buffer(GL::ARRAY_BUFFER, Some(&vbo_col));
-        gl.buffer_data_with_i32(
-            GL::ARRAY_BUFFER,
-            4 * MAX_POINTS as i32 * 4,
-            GL::DYNAMIC_DRAW,
-        );
-        gl.vertex_attrib_pointer_with_i32(1, 4, GL::FLOAT, false, 0, 0);
-
-        let ibo_lin = gl.create_buffer().ok_or("Failed to create buffer")?;
-        gl.bind_buffer(GL::ELEMENT_ARRAY_BUFFER, Some(&ibo_lin));
-        gl.buffer_data_with_i32(
-            GL::ELEMENT_ARRAY_BUFFER,
-            2 * MAX_POINTS as i32 * 2,
-            GL::DYNAMIC_DRAW,
-        );
-
-        let ibo_tri = gl.create_buffer().ok_or("Failed to create buffer")?;
-        gl.bind_buffer(GL::ELEMENT_ARRAY_BUFFER, Some(&ibo_lin));
-        gl.buffer_data_with_i32(
-            GL::ELEMENT_ARRAY_BUFFER,
-            2 * MAX_POINTS as i32 * 2,
-            GL::DYNAMIC_DRAW,
-        );
+        let vao_lin = MyVAO::new(gl.clone(), MAX_POINTS, MAX_POINTS * 2)?;
+        let vao_tri = MyVAO::new(gl.clone(), MAX_POINTS, MAX_POINTS * 3)?;
 
         let mvp_location = gl
             .get_uniform_location(&program, "mvpMatrix")
@@ -92,29 +50,28 @@ impl Scene {
         let mut r = Self {
             gl,
             program,
-            vao,
-            vbo_vtx,
-            vbo_col,
-            ibo_lin,
-            ibo_tri,
+            vao_lin,
+            vao_tri,
 
             mvp_location,
-            index_count: 0,
 
             points: vec![
-                Vec2::new(-0.5, 0.0),
-                Vec2::new(0.0, 0.5),
-                Vec2::new(0.5, 0.0),
+                Vec2::new(-0.4, -0.5),
+                Vec2::new(0.5, 0.5),
+                Vec2::new(-0.5, 0.5),
+                Vec2::new(0.4, -0.5),
             ],
+
+            splitnum: 16,
         };
 
-        r.update_spline();
+        r.update();
 
         Ok(r)
     }
 
-    fn update_spline(&mut self) {
-        let spline = make_spline(&self.points, 0., 32);
+    fn update(&mut self) {
+        let spline = make_curve(&self.points, self.splitnum);
         let n = self.points.len();
 
         let mut v = self
@@ -123,26 +80,57 @@ impl Scene {
             .flat_map(|v| [v.x, v.y, 0.0])
             .collect::<Vec<_>>();
         v.extend(spline.iter().flat_map(|v| [v.x, v.y, 0.0]));
-        send_vbo_data(&self.gl, &self.vbo_vtx, &v);
 
         let mut c = self
             .points
             .iter()
             .flat_map(|_| [1.0, 1.0, 1.0, 1.0])
             .collect::<Vec<_>>();
-        c.extend((0..spline.len()).flat_map(|i| match i % 2 {
-            0 => [1.0, 0.0, 1.0, 1.0],
-            1 => [0.0, 1.0, 1.0, 1.0],
-            _ => unreachable!(),
-        }));
-        send_vbo_data(&self.gl, &self.vbo_col, &c);
+        c.extend([0.0, 1.0, 1.0, 1.0].repeat(spline.len()));
 
         let mut idx = (0..(self.points.len() - 1) as u16)
             .flat_map(|i| [i, i + 1])
             .collect::<Vec<_>>();
         idx.extend((0..(spline.len() - 1) as u16).flat_map(|i| [n as u16 + i, n as u16 + i + 1]));
-        send_ibo_data(&self.gl, &self.ibo_lin, &idx);
-        self.index_count = idx.len() as i32;
+        self.vao_lin.send_data(&v, &c, &idx);
+
+        const DOT_SIZE: f32 = 0.005;
+        let mut v = spline
+            .iter()
+            .flat_map(|v| {
+                [
+                    v.x - DOT_SIZE,
+                    v.y - DOT_SIZE,
+                    0.0,
+                    v.x + DOT_SIZE,
+                    v.y - DOT_SIZE,
+                    0.0,
+                    v.x,
+                    v.y + DOT_SIZE,
+                    0.0,
+                ]
+            })
+            .collect::<Vec<_>>();
+        let mut c = [1.0, 0.0, 0.0, 1.0].repeat(spline.len() * 3);
+
+        v.extend(self.points.iter().flat_map(|v| {
+            [
+                v.x - DOT_SIZE,
+                v.y - DOT_SIZE,
+                0.0,
+                v.x + DOT_SIZE,
+                v.y - DOT_SIZE,
+                0.0,
+                v.x,
+                v.y + DOT_SIZE,
+                0.0,
+            ]
+        }));
+        c.extend([0.0, 1.0, 0.0, 1.0].repeat(self.points.len() * 3));
+
+        let idx = (0..((spline.len() + self.points.len()) * 3) as u16).collect::<Vec<_>>();
+
+        self.vao_tri.send_data(&v, &c, &idx);
     }
 
     fn draw(&self) {
@@ -153,8 +141,8 @@ impl Scene {
         self.gl.clear_depth(1.0);
         self.gl.clear(GL::COLOR_BUFFER_BIT | GL::DEPTH_BUFFER_BIT);
 
-        self.gl
-            .draw_elements_with_i32(GL::LINES, self.index_count, GL::UNSIGNED_SHORT, 0);
+        self.vao_lin.draw_elements(GL::LINES);
+        self.vao_tri.draw_elements(GL::TRIANGLES);
         self.gl.flush();
     }
 
@@ -178,7 +166,44 @@ impl Scene {
 
         self.points[i] = p;
 
-        self.update_spline();
+        self.update();
+    }
+
+    fn set_splitnum(&mut self, n: usize) {
+        if !(2..MAX_POINTS).contains(&n) {
+            return;
+        }
+
+        self.splitnum = n;
+        self.update();
+    }
+
+    fn set_order(&mut self, d: usize) {
+        if !(2..=MAX_POINTS).contains(&d) {
+            return;
+        }
+
+        let n = d + 1;
+        let m = self.points.len();
+        if n == m {
+            return;
+        }
+
+        let last = *self.points.last().unwrap();
+
+        if m < n {
+            let a = self.points[m - 2];
+            self.points.truncate(m - 1); // drop last
+            self.points.extend((1..n - m + 2).map(|i| {
+                let t = i as f32 / (n - m + 1) as f32;
+                a * (1. - t) + last * t
+            }));
+        } else {
+            self.points.truncate(n);
+            self.points[n - 1] = last;
+        }
+
+        self.update();
     }
 }
 
@@ -196,12 +221,40 @@ pub fn start() -> Result<(), JsValue> {
 
     let scene = Rc::new(RefCell::new(Scene::new(&canvas)?));
 
+    // mousemove handler
     let scene_ = scene.clone();
     let handler = Closure::wrap(Box::new(move |event: web_sys::MouseEvent| {
         scene_.borrow_mut().mousemove(event);
     }) as Box<dyn FnMut(_)>);
-
     canvas.add_event_listener_with_callback("mousemove", handler.as_ref().unchecked_ref())?;
+    handler.forget();
+
+    // input handlers
+    let scene_ = scene.clone();
+    let handler = Closure::wrap(Box::new(move |event: web_sys::Event| {
+        let targ = if let Some(e) = event.target() {
+            e
+        } else {
+            return;
+        };
+        let targ = targ.dyn_into::<HtmlInputElement>();
+        let targ = if let Ok(e) = targ { e } else { return };
+
+        let targid = targ.id();
+        let val = targ.value();
+
+        match &*targid {
+            "splitnum" => {
+                scene_.borrow_mut().set_splitnum(val.parse().unwrap());
+            }
+            "order" => {
+                scene_.borrow_mut().set_order(val.parse().unwrap());
+            }
+            _ => {}
+        }
+    }) as Box<dyn FnMut(_)>);
+    document.add_event_listener_with_callback("change", handler.as_ref().unchecked_ref())?;
+
     handler.forget();
 
     let closure = Rc::new(RefCell::new(None));
@@ -217,27 +270,24 @@ pub fn start() -> Result<(), JsValue> {
     Ok(())
 }
 
-fn send_vbo_data(gl: &GL, vbo: &WebGlBuffer, data: &[f32]) {
-    gl.bind_buffer(GL::ARRAY_BUFFER, Some(vbo));
-    let view = unsafe { js_sys::Float32Array::view(data) };
-    gl.buffer_sub_data_with_i32_and_array_buffer_view(GL::ARRAY_BUFFER, 0, &view);
+fn make_bezier_normal(points: &[Vec2], n: usize) -> Vec<Vec2> {
+    let m = points.len();
+    (0..n + 1)
+        .map(|i| {
+            let t = i as f32 / n as f32;
+            let mut v = points.to_vec();
+            for j in (1..m).rev() {
+                for k in 0..j {
+                    v[k] = v[k] * (1. - t) + v[k + 1] * t;
+                }
+            }
+            v[0]
+        })
+        .collect()
 }
 
-fn send_ibo_data(gl: &GL, ibo: &WebGlBuffer, data: &[u16]) {
-    gl.bind_buffer(GL::ELEMENT_ARRAY_BUFFER, Some(ibo));
-    let view = unsafe { js_sys::Uint16Array::view(data) };
-    gl.buffer_sub_data_with_i32_and_array_buffer_view(GL::ELEMENT_ARRAY_BUFFER, 0, &view);
-}
-
-fn make_spline(points: &[Vec2], _p: f32, n: usize) -> Vec<Vec2> {
-    let mut r = vec![];
-    r.extend((0..n).map(|j| {
-        let t = j as f32 / (n - 1) as f32;
-        let p0 = points[0] * (1. - t) + points[1] * t;
-        let p1 = points[1] * (1. - t) + points[2] * t;
-        p0 * (1. - t) + p1 * t
-    }));
-    r
+fn make_curve(points: &[Vec2], n: usize) -> Vec<Vec2> {
+    make_bezier_normal(points, n)
 }
 
 fn send_mvp_matrix(gl: &GL, location: &WebGlUniformLocation) {

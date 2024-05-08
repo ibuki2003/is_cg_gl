@@ -3,6 +3,8 @@ extern crate nalgebra_glm as glm;
 use wasm_bindgen::{prelude::*, JsCast};
 use web_sys::{WebGl2RenderingContext as GL, *};
 
+pub mod vao;
+
 pub fn create_program(
     gl: &GL,
     source_vertex: &'static str,
