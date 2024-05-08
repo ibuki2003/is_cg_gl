@@ -5,6 +5,8 @@ use std::{cell::RefCell, rc::Rc};
 use wasm_bindgen::{prelude::*, JsCast};
 use web_sys::{WebGl2RenderingContext as GL, *};
 
+mod curves;
+
 struct Scene {
     gl: Rc<GL>,
     program: WebGlProgram,
@@ -17,6 +19,9 @@ struct Scene {
     points: Vec<Vec2>,
 
     splitnum: usize,
+    curvetype: curves::CurveType,
+
+    dragging: Option<usize>,
 }
 
 const MAX_POINTS: usize = 1024;
@@ -63,6 +68,9 @@ impl Scene {
             ],
 
             splitnum: 16,
+            curvetype: curves::CurveType::Bezier,
+
+            dragging: None,
         };
 
         r.update();
@@ -71,7 +79,7 @@ impl Scene {
     }
 
     fn update(&mut self) {
-        let spline = make_curve(&self.points, self.splitnum);
+        let spline = curves::make_curve(&self.points, self.splitnum, self.curvetype);
         let n = self.points.len();
 
         let mut v = self
@@ -86,7 +94,10 @@ impl Scene {
             .iter()
             .flat_map(|_| [1.0, 1.0, 1.0, 1.0])
             .collect::<Vec<_>>();
-        c.extend([0.0, 1.0, 1.0, 1.0].repeat(spline.len()));
+        c.extend((0..spline.len()).flat_map(|i| {
+            let t = i as f32 / (spline.len() - 1) as f32;
+            [1.0, 1.0 - t, t, 1.0]
+        }));
 
         let mut idx = (0..(self.points.len() - 1) as u16)
             .flat_map(|i| [i, i + 1])
@@ -146,8 +157,9 @@ impl Scene {
         self.gl.flush();
     }
 
-    fn mousemove(&mut self, event: web_sys::MouseEvent) {
+    fn mouse_handler(&mut self, event: web_sys::MouseEvent) {
         if event.buttons() != 1 {
+            self.dragging = None;
             return;
         }
 
@@ -156,13 +168,23 @@ impl Scene {
             -(event.offset_y() as f32 / CANVAS_SIZE as f32) * 2. + 1.,
         );
 
-        let i = self
-            .points
-            .iter()
-            .enumerate()
-            .min_by_key(|(_, x)| ((*x - p).norm_squared() * 1000.0) as i32)
-            .map(|(i, _)| i)
-            .unwrap();
+        let i = match self.dragging {
+            None => {
+                let i = self
+                    .points
+                    .iter()
+                    .map(|v| (v - p).norm_squared())
+                    .enumerate()
+                    .min_by(|(_, a), (_, b)| {
+                        a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
+                    })
+                    .map(|(i, _)| i)
+                    .unwrap();
+                self.dragging = Some(i);
+                i
+            },
+            Some(i) => i,
+        };
 
         self.points[i] = p;
 
@@ -224,9 +246,11 @@ pub fn start() -> Result<(), JsValue> {
     // mousemove handler
     let scene_ = scene.clone();
     let handler = Closure::wrap(Box::new(move |event: web_sys::MouseEvent| {
-        scene_.borrow_mut().mousemove(event);
+        scene_.borrow_mut().mouse_handler(event);
     }) as Box<dyn FnMut(_)>);
     canvas.add_event_listener_with_callback("mousemove", handler.as_ref().unchecked_ref())?;
+    canvas.add_event_listener_with_callback("mouseup", handler.as_ref().unchecked_ref())?;
+    canvas.add_event_listener_with_callback("mousedown", handler.as_ref().unchecked_ref())?;
     handler.forget();
 
     // input handlers
@@ -240,7 +264,7 @@ pub fn start() -> Result<(), JsValue> {
         let targ = targ.dyn_into::<HtmlInputElement>();
         let targ = if let Ok(e) = targ { e } else { return };
 
-        let targid = targ.id();
+        let targid = targ.name();
         let val = targ.value();
 
         match &*targid {
@@ -249,6 +273,18 @@ pub fn start() -> Result<(), JsValue> {
             }
             "order" => {
                 scene_.borrow_mut().set_order(val.parse().unwrap());
+            }
+            "curvetype" => {
+                let mut scene = scene_.borrow_mut();
+                scene.curvetype = match val.as_str() {
+                    "bezier" =>  curves::CurveType::Bezier,
+                    "catmullrom_uniform" => curves::CurveType::CatmullRom(curves::CatmullRomParmType::Uniform),
+                    "catmullrom_chordal" => curves::CurveType::CatmullRom(curves::CatmullRomParmType::ChordLength),
+                    "catmullrom_centripetal" => curves::CurveType::CatmullRom(curves::CatmullRomParmType::Centripetal),
+                    _ => { return; }
+                };
+                scene.update();
+
             }
             _ => {}
         }
@@ -270,25 +306,6 @@ pub fn start() -> Result<(), JsValue> {
     Ok(())
 }
 
-fn make_bezier_normal(points: &[Vec2], n: usize) -> Vec<Vec2> {
-    let m = points.len();
-    (0..n + 1)
-        .map(|i| {
-            let t = i as f32 / n as f32;
-            let mut v = points.to_vec();
-            for j in (1..m).rev() {
-                for k in 0..j {
-                    v[k] = v[k] * (1. - t) + v[k + 1] * t;
-                }
-            }
-            v[0]
-        })
-        .collect()
-}
-
-fn make_curve(points: &[Vec2], n: usize) -> Vec<Vec2> {
-    make_bezier_normal(points, n)
-}
 
 fn send_mvp_matrix(gl: &GL, location: &WebGlUniformLocation) {
     let mvp_matrix = glm::Mat4::identity();

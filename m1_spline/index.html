@@ -9,10 +9,31 @@
   <body>
     <h1>M1: Spline Demo</h1>
     <canvas id="canvas"></canvas>
-    <p>
-      <input type="number" id="splitnum" value="16" min="2" max="128" />
-      <input type="number" id="order" value="2" min="2" max="16" />
-    </p>
+    <form onsubmit="return false">
+      <p>
+        <label for="inp_split">Split</label>
+        <input type="number" id="inp_split" name="split" value="16" min="2" max="128" />
+      </p>
+      <p>
+        <label for="inp_order">Order</label>
+        <input type="number" id="inp_order" name="order" value="2" min="2" max="16" />
+      </p>
+      <p>
+        <label for="mode">Mode</label>
+
+        <input type="radio" name="curvetype" id="rd_bezier" value="bezier" checked />
+        <label for="rd_bezier">Bezier</label>
+
+        <input type="radio" name="curvetype" id="rd_cr_u" value="catmullrom_uniform" />
+        <label for="rd_cr_u">Catmull-Rom (Uniform)</label>
+
+        <input type="radio" name="curvetype" id="rd_cr_ch" value="catmullrom_chordal" />
+        <label for="rd_cr_ch">Catmull-Rom (Chordal)</label>
+
+        <input type="radio" name="curvetype" id="rd_cr_ce" value="catmullrom_centripetal" />
+        <label for="rd_cr_ce">Catmull-Rom (Centripetal)</label>
+      </p>
+    </form>
 
     <script type="module" src="./index.ts"></script>
   </body>
