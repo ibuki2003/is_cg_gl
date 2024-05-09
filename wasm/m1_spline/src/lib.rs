@@ -268,7 +268,7 @@ pub fn start() -> Result<(), JsValue> {
         let val = targ.value();
 
         match &*targid {
-            "splitnum" => {
+            "split" => {
                 scene_.borrow_mut().set_splitnum(val.parse().unwrap());
             }
             "order" => {
