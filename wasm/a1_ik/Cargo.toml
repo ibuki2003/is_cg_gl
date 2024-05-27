@@ -14,5 +14,5 @@ wasm-bindgen = { workspace = true }
 js-sys = { workspace = true }
 nalgebra-glm = { workspace = true }
 console_error_panic_hook = { workspace = true }
-web-sys = { workspace = true, features = ["MouseEvent", "HtmlInputElement", "Event"] }
+web-sys = { workspace = true, features = ["MouseEvent", "WheelEvent", "HtmlButtonElement"] }
 common = { path = "../common" }

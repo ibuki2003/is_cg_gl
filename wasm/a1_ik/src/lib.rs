@@ -1,11 +1,12 @@
 use common::vao::MyVAO;
-use glm::Vec2;
+use glm::{Vec2, rotate_vec2};
 use nalgebra_glm as glm;
+
 use std::{cell::RefCell, rc::Rc};
 use wasm_bindgen::{prelude::*, JsCast};
 use web_sys::{WebGl2RenderingContext as GL, *};
 
-mod curves;
+mod ik;
 
 struct Scene {
     gl: Rc<GL>,
@@ -16,12 +17,8 @@ struct Scene {
 
     mvp_location: WebGlUniformLocation,
 
-    points: Vec<Vec2>,
 
-    splitnum: usize,
-    curvetype: curves::CurveType,
-
-    dragging: Option<usize>,
+    ik: ik::IK,
 }
 
 const MAX_POINTS: usize = 1024;
@@ -60,17 +57,7 @@ impl Scene {
 
             mvp_location,
 
-            points: vec![
-                Vec2::new(-0.4, -0.5),
-                Vec2::new(0.5, 0.5),
-                Vec2::new(-0.5, 0.5),
-                Vec2::new(0.4, -0.5),
-            ],
-
-            splitnum: 16,
-            curvetype: curves::CurveType::Bezier,
-
-            dragging: None,
+            ik: ik::IK::new(),
         };
 
         r.update();
@@ -79,68 +66,42 @@ impl Scene {
     }
 
     fn update(&mut self) {
-        let spline = curves::make_curve(&self.points, self.splitnum, self.curvetype);
-        let n = self.points.len();
+        let p = self.ik.render();
+        let n = p.len();
 
-        let mut v = self
-            .points
-            .iter()
-            .flat_map(|v| [v.x, v.y, 0.0])
-            .collect::<Vec<_>>();
-        v.extend(spline.iter().flat_map(|v| [v.x, v.y, 0.0]));
+        let mut v = vec![];
 
-        let mut c = self
-            .points
+        v.extend(p
+            .windows(2)
+            .flat_map(|v| {
+                let v0 = v[0];
+                let v3 = v[1];
+                let d = v3 - v0;
+                let v1 = v0 + rotate_vec2(&d, 0.5) * 0.2;
+                let v2 = v0 + rotate_vec2(&d, -0.5) * 0.2;
+                [
+                    v0.x, v0.y, 0.0,
+                    v1.x, v1.y, 0.0,
+                    v2.x, v2.y, 0.0,
+                    v3.x, v3.y, 0.0,
+                ]
+            }));
+
+        let mut c = p
             .iter()
             .flat_map(|_| [1.0, 1.0, 1.0, 1.0])
             .collect::<Vec<_>>();
-        c.extend((0..spline.len()).flat_map(|i| {
-            let t = i as f32 / (spline.len() - 1) as f32;
-            [1.0, 1.0 - t, t, 1.0]
-        }));
 
-        let mut idx = (0..(self.points.len() - 1) as u16)
-            .flat_map(|i| [i, i + 1])
+        let mut idx = (0..(p.len() - 1) as u16)
+            .flat_map(|i| [
+                i * 4,
+                i * 4 + 3,
+                i * 4 + 1,
+                i * 4,
+                i * 4 + 2,
+                i * 4 + 3,
+            ])
             .collect::<Vec<_>>();
-        idx.extend((0..(spline.len() - 1) as u16).flat_map(|i| [n as u16 + i, n as u16 + i + 1]));
-        self.vao_lin.send_data(&v, &c, &idx);
-
-        const DOT_SIZE: f32 = 0.005;
-        let mut v = spline
-            .iter()
-            .flat_map(|v| {
-                [
-                    v.x - DOT_SIZE,
-                    v.y - DOT_SIZE,
-                    0.0,
-                    v.x + DOT_SIZE,
-                    v.y - DOT_SIZE,
-                    0.0,
-                    v.x,
-                    v.y + DOT_SIZE,
-                    0.0,
-                ]
-            })
-            .collect::<Vec<_>>();
-        let mut c = [1.0, 0.0, 0.0, 1.0].repeat(spline.len() * 3);
-
-        v.extend(self.points.iter().flat_map(|v| {
-            [
-                v.x - DOT_SIZE,
-                v.y - DOT_SIZE,
-                0.0,
-                v.x + DOT_SIZE,
-                v.y - DOT_SIZE,
-                0.0,
-                v.x,
-                v.y + DOT_SIZE,
-                0.0,
-            ]
-        }));
-        c.extend([0.0, 1.0, 0.0, 1.0].repeat(self.points.len() * 3));
-
-        let idx = (0..((spline.len() + self.points.len()) * 3) as u16).collect::<Vec<_>>();
-
         self.vao_tri.send_data(&v, &c, &idx);
     }
 
@@ -159,7 +120,6 @@ impl Scene {
 
     fn mouse_handler(&mut self, event: web_sys::MouseEvent) {
         if event.buttons() != 1 {
-            self.dragging = None;
             return;
         }
 
@@ -168,65 +128,44 @@ impl Scene {
             -(event.offset_y() as f32 / CANVAS_SIZE as f32) * 2. + 1.,
         );
 
-        let i = match self.dragging {
-            None => {
-                let i = self
-                    .points
-                    .iter()
-                    .map(|v| (v - p).norm_squared())
-                    .enumerate()
-                    .min_by(|(_, a), (_, b)| {
-                        a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
-                    })
-                    .map(|(i, _)| i)
-                    .unwrap();
-                self.dragging = Some(i);
-                i
-            },
-            Some(i) => i,
-        };
+        // todo!();
 
-        self.points[i] = p;
+        self.ik.update(p);
 
         self.update();
     }
 
-    fn set_splitnum(&mut self, n: usize) {
-        if !(2..MAX_POINTS).contains(&n) {
-            return;
-        }
+    fn scroll_handler(&mut self, event: web_sys::WheelEvent) {
+        let delta: f64 = event.delta_y();
+        if delta.abs() < 1. { return; }
+        // todo!();
+        let p = Vec2::new(
+            (event.offset_x() as f32 / CANVAS_SIZE as f32) * 2. - 1.,
+            -(event.offset_y() as f32 / CANVAS_SIZE as f32) * 2. + 1.,
+        );
 
-        self.splitnum = n;
+        // console::log_1(&format!("delta: {}", delta).into());
+
+        let ps = self.ik.render();
+        let e = ps.windows(2).map(|v| ((v[1] + v[0]) * 0.5 - p).magnitude_squared());
+        let nearest = e.enumerate().min_by(|a, b| a.1.partial_cmp(&b.1).unwrap()).unwrap().0;
+
+        let l = &mut self.ik.arms[nearest].length;
+        *l = (*l - 0.1 * delta.signum() as f32).max(0.1);
+
         self.update();
     }
 
-    fn set_order(&mut self, d: usize) {
-        if !(2..=MAX_POINTS).contains(&d) {
-            return;
-        }
-
-        let n = d + 1;
-        let m = self.points.len();
-        if n == m {
-            return;
-        }
-
-        let last = *self.points.last().unwrap();
-
-        if m < n {
-            let a = self.points[m - 2];
-            self.points.truncate(m - 1); // drop last
-            self.points.extend((1..n - m + 2).map(|i| {
-                let t = i as f32 / (n - m + 1) as f32;
-                a * (1. - t) + last * t
-            }));
+    fn addrmv(&mut self, d: i32) {
+        if d < 0 {
+            for _ in 0..d.abs() { self.ik.pop_arm(); }
         } else {
-            self.points.truncate(n);
-            self.points[n - 1] = last;
+            for _ in 0..d { self.ik.add_arm(); }
         }
-
         self.update();
     }
+
+
 }
 
 const CANVAS_SIZE: u32 = 1024;
@@ -249,48 +188,36 @@ pub fn start() -> Result<(), JsValue> {
         scene_.borrow_mut().mouse_handler(event);
     }) as Box<dyn FnMut(_)>);
     canvas.add_event_listener_with_callback("mousemove", handler.as_ref().unchecked_ref())?;
-    canvas.add_event_listener_with_callback("mouseup", handler.as_ref().unchecked_ref())?;
     canvas.add_event_listener_with_callback("mousedown", handler.as_ref().unchecked_ref())?;
     handler.forget();
 
-    // input handlers
     let scene_ = scene.clone();
-    let handler = Closure::wrap(Box::new(move |event: web_sys::Event| {
-        let targ = if let Some(e) = event.target() {
-            e
-        } else {
-            return;
-        };
-        let targ = targ.dyn_into::<HtmlInputElement>();
-        let targ = if let Ok(e) = targ { e } else { return };
-
-        let targid = targ.name();
-        let val = targ.value();
-
-        match &*targid {
-            "split" => {
-                scene_.borrow_mut().set_splitnum(val.parse().unwrap());
-            }
-            "order" => {
-                scene_.borrow_mut().set_order(val.parse().unwrap());
-            }
-            "curvetype" => {
-                let mut scene = scene_.borrow_mut();
-                scene.curvetype = match val.as_str() {
-                    "bezier" =>  curves::CurveType::Bezier,
-                    "catmullrom_uniform" => curves::CurveType::CatmullRom(curves::CatmullRomParmType::Uniform),
-                    "catmullrom_chordal" => curves::CurveType::CatmullRom(curves::CatmullRomParmType::ChordLength),
-                    "catmullrom_centripetal" => curves::CurveType::CatmullRom(curves::CatmullRomParmType::Centripetal),
-                    _ => { return; }
-                };
-                scene.update();
-
-            }
-            _ => {}
-        }
+    let handler = Closure::wrap(Box::new(move |event: web_sys::WheelEvent| {
+        scene_.borrow_mut().scroll_handler(event);
     }) as Box<dyn FnMut(_)>);
-    document.add_event_listener_with_callback("change", handler.as_ref().unchecked_ref())?;
+    canvas.add_event_listener_with_callback("wheel", handler.as_ref().unchecked_ref())?;
+    handler.forget();
 
+    let btn_add = document
+        .get_element_by_id("btn_add")
+        .ok_or("btn_add not found")?
+        .dyn_into::<HtmlButtonElement>()?;
+    let scene_ = scene.clone();
+    let handler = Closure::wrap(Box::new(move |event: web_sys::WheelEvent| {
+        scene_.borrow_mut().addrmv(1);
+    }) as Box<dyn FnMut(_)>);
+    btn_add.add_event_listener_with_callback("click", handler.as_ref().unchecked_ref())?;
+    handler.forget();
+
+    let btn_rmv = document
+        .get_element_by_id("btn_rmv")
+        .ok_or("btn_rmv not found")?
+        .dyn_into::<HtmlButtonElement>()?;
+    let scene_ = scene.clone();
+    let handler = Closure::wrap(Box::new(move |event: web_sys::WheelEvent| {
+        scene_.borrow_mut().addrmv(-1);
+    }) as Box<dyn FnMut(_)>);
+    btn_rmv.add_event_listener_with_callback("click", handler.as_ref().unchecked_ref())?;
     handler.forget();
 
     let closure = Rc::new(RefCell::new(None));
