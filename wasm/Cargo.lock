@@ -3,6 +3,18 @@
 version = 3
 
 [[package]]
+name = "a1_ik"
+version = "0.1.0"
+dependencies = [
+ "common",
+ "console_error_panic_hook",
+ "js-sys",
+ "nalgebra-glm",
+ "wasm-bindgen",
+ "web-sys",
+]
+
+[[package]]
 name = "approx"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
