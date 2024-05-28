@@ -1,5 +1,5 @@
 use common::vao::MyVAO;
-use glm::{Vec2, rotate_vec2};
+use glm::{rotate_vec2, Vec2};
 use nalgebra_glm as glm;
 
 use std::{cell::RefCell, rc::Rc};
@@ -16,7 +16,6 @@ struct Scene {
     vao_tri: MyVAO,
 
     mvp_location: WebGlUniformLocation,
-
 
     ik: ik::IK,
 }
@@ -71,21 +70,16 @@ impl Scene {
 
         let mut v = vec![];
 
-        v.extend(p
-            .windows(2)
-            .flat_map(|v| {
-                let v0 = v[0];
-                let v3 = v[1];
-                let d = v3 - v0;
-                let v1 = v0 + rotate_vec2(&d, 0.5) * 0.2;
-                let v2 = v0 + rotate_vec2(&d, -0.5) * 0.2;
-                [
-                    v0.x, v0.y, 0.0,
-                    v1.x, v1.y, 0.0,
-                    v2.x, v2.y, 0.0,
-                    v3.x, v3.y, 0.0,
-                ]
-            }));
+        v.extend(p.windows(2).flat_map(|v| {
+            let v0 = v[0];
+            let v3 = v[1];
+            let d = v3 - v0;
+            let v1 = v0 + rotate_vec2(&d, 0.5) * 0.2;
+            let v2 = v0 + rotate_vec2(&d, -0.5) * 0.2;
+            [
+                v0.x, v0.y, 0.0, v1.x, v1.y, 0.0, v2.x, v2.y, 0.0, v3.x, v3.y, 0.0,
+            ]
+        }));
 
         let mut c = p
             .iter()
@@ -93,14 +87,7 @@ impl Scene {
             .collect::<Vec<_>>();
 
         let mut idx = (0..(p.len() - 1) as u16)
-            .flat_map(|i| [
-                i * 4,
-                i * 4 + 3,
-                i * 4 + 1,
-                i * 4,
-                i * 4 + 2,
-                i * 4 + 3,
-            ])
+            .flat_map(|i| [i * 4, i * 4 + 3, i * 4 + 1, i * 4, i * 4 + 2, i * 4 + 3])
             .collect::<Vec<_>>();
         self.vao_tri.send_data(&v, &c, &idx);
     }
@@ -137,7 +124,9 @@ impl Scene {
 
     fn scroll_handler(&mut self, event: web_sys::WheelEvent) {
         let delta: f64 = event.delta_y();
-        if delta.abs() < 1. { return; }
+        if delta.abs() < 1. {
+            return;
+        }
         // todo!();
         let p = Vec2::new(
             (event.offset_x() as f32 / CANVAS_SIZE as f32) * 2. - 1.,
@@ -147,8 +136,14 @@ impl Scene {
         // console::log_1(&format!("delta: {}", delta).into());
 
         let ps = self.ik.render();
-        let e = ps.windows(2).map(|v| ((v[1] + v[0]) * 0.5 - p).magnitude_squared());
-        let nearest = e.enumerate().min_by(|a, b| a.1.partial_cmp(&b.1).unwrap()).unwrap().0;
+        let e = ps
+            .windows(2)
+            .map(|v| ((v[1] + v[0]) * 0.5 - p).magnitude_squared());
+        let nearest = e
+            .enumerate()
+            .min_by(|a, b| a.1.partial_cmp(&b.1).unwrap())
+            .unwrap()
+            .0;
 
         let l = &mut self.ik.arms[nearest].length;
         *l = (*l - 0.1 * delta.signum() as f32).max(0.1);
@@ -158,14 +153,16 @@ impl Scene {
 
     fn addrmv(&mut self, d: i32) {
         if d < 0 {
-            for _ in 0..d.abs() { self.ik.pop_arm(); }
+            for _ in 0..d.abs() {
+                self.ik.pop_arm();
+            }
         } else {
-            for _ in 0..d { self.ik.add_arm(); }
+            for _ in 0..d {
+                self.ik.add_arm();
+            }
         }
         self.update();
     }
-
-
 }
 
 const CANVAS_SIZE: u32 = 1024;
@@ -232,7 +229,6 @@ pub fn start() -> Result<(), JsValue> {
 
     Ok(())
 }
-
 
 fn send_mvp_matrix(gl: &GL, location: &WebGlUniformLocation) {
     let mvp_matrix = glm::Mat4::identity();

@@ -175,14 +175,12 @@ impl Scene {
                     .iter()
                     .map(|v| (v - p).norm_squared())
                     .enumerate()
-                    .min_by(|(_, a), (_, b)| {
-                        a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
-                    })
+                    .min_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
                     .map(|(i, _)| i)
                     .unwrap();
                 self.dragging = Some(i);
                 i
-            },
+            }
             Some(i) => i,
         };
 
@@ -277,14 +275,21 @@ pub fn start() -> Result<(), JsValue> {
             "curvetype" => {
                 let mut scene = scene_.borrow_mut();
                 scene.curvetype = match val.as_str() {
-                    "bezier" =>  curves::CurveType::Bezier,
-                    "catmullrom_uniform" => curves::CurveType::CatmullRom(curves::CatmullRomParmType::Uniform),
-                    "catmullrom_chordal" => curves::CurveType::CatmullRom(curves::CatmullRomParmType::ChordLength),
-                    "catmullrom_centripetal" => curves::CurveType::CatmullRom(curves::CatmullRomParmType::Centripetal),
-                    _ => { return; }
+                    "bezier" => curves::CurveType::Bezier,
+                    "catmullrom_uniform" => {
+                        curves::CurveType::CatmullRom(curves::CatmullRomParmType::Uniform)
+                    }
+                    "catmullrom_chordal" => {
+                        curves::CurveType::CatmullRom(curves::CatmullRomParmType::ChordLength)
+                    }
+                    "catmullrom_centripetal" => {
+                        curves::CurveType::CatmullRom(curves::CatmullRomParmType::Centripetal)
+                    }
+                    _ => {
+                        return;
+                    }
                 };
                 scene.update();
-
             }
             _ => {}
         }
@@ -305,7 +310,6 @@ pub fn start() -> Result<(), JsValue> {
 
     Ok(())
 }
-
 
 fn send_mvp_matrix(gl: &GL, location: &WebGlUniformLocation) {
     let mvp_matrix = glm::Mat4::identity();

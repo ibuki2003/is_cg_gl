@@ -13,7 +13,6 @@ pub enum CurveType {
     CatmullRom(CatmullRomParmType),
 }
 
-
 fn make_bezier_normal(points: &[Vec2], n: usize) -> Vec<Vec2> {
     let m = points.len();
     (0..n + 1)
@@ -33,7 +32,9 @@ fn make_bezier_normal(points: &[Vec2], n: usize) -> Vec<Vec2> {
 fn make_catmull_rom(points: &[Vec2], n: usize, curvetype: CatmullRomParmType) -> Vec<Vec2> {
     let m = points.len();
 
-    let mut segments = points.iter().map(|w| Vec3::new(w.x, w.y, 0.0))
+    let mut segments = points
+        .iter()
+        .map(|w| Vec3::new(w.x, w.y, 0.0))
         .collect::<Vec<_>>();
 
     for i in 1..m {
@@ -55,7 +56,7 @@ fn make_catmull_rom(points: &[Vec2], n: usize, curvetype: CatmullRomParmType) ->
                 idx += 1;
             }
 
-            interp(&segments[idx.max(1)-1..(idx + 3).min(m)], t)
+            interp(&segments[idx.max(1) - 1..(idx + 3).min(m)], t)
         })
         .collect()
 }
@@ -66,7 +67,7 @@ fn interp(p: &[Vec3], z: f32) -> Vec2 {
         2 => {
             let t = (z - p[0].z) / (p[1].z - p[0].z);
             p[0].xy() * (1. - t) + p[1].xy() * t
-        },
+        }
         3 => {
             let p0 = interp(&p[0..2], z);
             let p0 = Vec3::new(p0.x, p0.y, p[0].z);
@@ -75,7 +76,7 @@ fn interp(p: &[Vec3], z: f32) -> Vec2 {
             let p1 = Vec3::new(p1.x, p1.y, p[2].z);
 
             interp(&[p0, p1], z)
-        },
+        }
         4 => {
             let p0 = interp(&p[0..3], z);
             let p0 = Vec3::new(p0.x, p0.y, p[1].z);
@@ -84,7 +85,7 @@ fn interp(p: &[Vec3], z: f32) -> Vec2 {
             let p1 = Vec3::new(p1.x, p1.y, p[2].z);
 
             interp(&[p0, p1], z)
-        },
+        }
         _ => unimplemented!(),
     }
 }

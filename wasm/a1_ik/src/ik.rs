@@ -84,7 +84,9 @@ impl IK {
     }
 
     pub fn pop_arm(&mut self) {
-        if self.arms.len() <= 1 { return; }
+        if self.arms.len() <= 1 {
+            return;
+        }
         self.arms.pop();
     }
 }
