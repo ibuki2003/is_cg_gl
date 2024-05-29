@@ -6,3 +6,4 @@ main source code files are in `wasm/[project]/src/`
 
 - [(m0_demo)](wasm/m0_demo/src)
 - [m1_spline](wasm/m1_spline/src)
+- [a1_ik](wasm/a1_ik/src)
