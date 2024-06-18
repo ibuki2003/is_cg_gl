@@ -14,5 +14,8 @@
     "path": "^0.12.7",
     "typescript": "^5.2.2",
     "vite": "^5.2.0"
+  },
+  "dependencies": {
+    "@amandaghassaei/stl-parser": "^1.7.0"
   }
 }

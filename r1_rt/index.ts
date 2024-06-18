@@ -1,5 +1,7 @@
 import vertexShaderSource from './vertex.glsl?raw';
 import fragmentShaderSource from './fragment.glsl?raw';
+import { loadSTLAsync } from "@amandaghassaei/stl-parser";
+
 interface Mesh {
   vertices: Float32Array;
   normals: Float32Array;
@@ -9,6 +11,7 @@ interface Mesh {
 
 async function main() {
   const canvas = document.getElementById('canvas') as HTMLCanvasElement
+  const output = document.getElementById('output')!;
   canvas.width = 800;
   canvas.height = 600;
   const gl = canvas.getContext('webgl2');
@@ -82,7 +85,7 @@ async function main() {
     const uniform_numindices = gl.getUniformLocation(program, 'numIndices');
     const uniform_normals = gl.getUniformLocation(program, 'normals');
 
-    const mesh = await generateMesh_sphere();
+    const mesh = await generateMesh_STL('../suzanne.stl');
 
     const cnt = Math.floor(mesh.indices.length / 3);
 
@@ -212,3 +215,35 @@ async function generateMesh_sphere(): Promise<Mesh> {
     indices,
   };
 }
+
+async function generateMesh_STL(url: string): Promise<Mesh> {
+  const mesh = (await loadSTLAsync(url))
+    .mergeVertices()
+    .scaleVerticesToUnitBoundingBox();
+
+  const {
+    vertices,
+    facesNormals,
+    facesIndices
+  } = mesh;
+  const normals = Array.from({length: vertices.length}, () => [0., 0., 0.]);
+  for (let i = 0; i < facesIndices.length; i+=3) {
+    for (let j = 0; j < 3; ++j) {
+      const idx = facesIndices[i+j];
+      normals[idx][0] += facesNormals[i];
+      normals[idx][1] += facesNormals[i+1];
+      normals[idx][2] += facesNormals[i+2];
+    }
+  }
+
+  const normals_ = new Float32Array(normals.flatMap(v => {
+    const n = Math.sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
+    return [v[0]/n, v[1]/n, v[2]/n];
+  }));
+  return {
+    vertices: vertices,
+    normals: normals_,
+    indices: new Uint16Array(facesIndices),
+  };
+}
+
