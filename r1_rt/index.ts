@@ -74,6 +74,7 @@ async function main() {
     const uniform_vertices = gl.getUniformLocation(program, 'vertices');
     const uniform_indices = gl.getUniformLocation(program, 'indices');
     const uniform_numindices = gl.getUniformLocation(program, 'numIndices');
+    const uniform_normals = gl.getUniformLocation(program, 'normals');
 
     const T = 10;
     const U = 12;
@@ -116,6 +117,7 @@ async function main() {
     const cnt = Math.floor(idx.length / 3);
 
     gl.uniform3fv(uniform_vertices, v);
+    gl.uniform3fv(uniform_normals, v); // now normals = vertices
     gl.uniform3uiv(uniform_indices, idx);
     gl.uniform1ui(uniform_numindices, cnt);
     console.log({uniform_vertices, uniform_indices, uniform_numindices});

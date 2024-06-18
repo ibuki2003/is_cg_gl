@@ -22,6 +22,7 @@ const vec3 CameraTo = vec3(0.0, 0.0, 0.0);
 const vec3 CameraUp = vec3(0.0, 1.0, 0.0);
 
 uniform vec3 vertices[1000];
+uniform vec3 normals[1000];
 uniform uvec3 indices[1000];
 uniform uint numIndices;
 
@@ -85,7 +86,10 @@ bool intersectToSphere(
   return false;
 }
 
-bool intersectToTriangle(vec3 a, vec3 b, vec3 c, Ray ray, inout Hit hit) {
+bool intersectToTriangle(
+    vec3 a, vec3 b, vec3 c,
+    vec3 na, vec3 nb, vec3 nc,
+    Ray ray, inout Hit hit) {
   float t0 = 0.0;
   t0 += (a.x - b.x) * (a.y - c.y) * (ray.dir.z);
   t0 += (a.y - b.y) * (a.z - c.z) * (ray.dir.x);
@@ -131,8 +135,7 @@ bool intersectToTriangle(vec3 a, vec3 b, vec3 c, Ray ray, inout Hit hit) {
      ) { return false; }
 
   hit.distanceToHitpoint = t;
-  hit.normal = normalize(cross(b - a, c - a));
-  if (dot(hit.normal, ray.dir) > 0.0) { hit.normal *= -1.0; }
+  hit.normal = alpha * na + beta * nb + gamma * nc;
   return true;
 }
 
@@ -143,10 +146,14 @@ bool intersect(Ray ray, out Hit hit)
 
   intersectToSphere(vec3(0.0, 0.0, 0.1), 0.1, ray, hit);
   for (uint i = 0u; i < numIndices; i++) {
-    vec3 a = vertices[indices[i].x];
-    vec3 b = vertices[indices[i].y];
-    vec3 c = vertices[indices[i].z];
-    intersectToTriangle(a, b, c, ray, hit);
+    intersectToTriangle(
+        vertices[indices[i].x],
+        vertices[indices[i].y],
+        vertices[indices[i].z],
+        normals[indices[i].x],
+        normals[indices[i].y],
+        normals[indices[i].z],
+        ray, hit);
   }
 
   return hit.distanceToHitpoint < LargeFloat();
