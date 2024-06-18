@@ -17,7 +17,7 @@ struct Hit
 
 const float FilmDistance = 3.0;
 
-const vec3 CameraFrom = vec3(5.0, 2.0, 3.0);
+uniform vec3 cameraPos;
 const vec3 CameraTo = vec3(0.0, 0.0, 0.0);
 const vec3 CameraUp = vec3(0.0, 1.0, 0.0);
 
@@ -45,7 +45,7 @@ Ray generateCameraRay(
 
   // 2. カメラパラメータからカメラ座標系の正規直交基底を計算。
   vec3 u, v, w, e;
-  createOrthoNormalBasis(CameraFrom, CameraTo, CameraUp, u, v, w, e);
+  createOrthoNormalBasis(cameraPos, CameraTo, CameraUp, u, v, w, e);
 
   // 3. ピクセル座標を基底を用いてワールド座標系に変換
   vec3 dir = w + (pixelCoordinate.x * u + pixelCoordinate.y * v) / FilmDistance;

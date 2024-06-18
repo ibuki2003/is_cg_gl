@@ -71,12 +71,65 @@ async function main() {
   gl.enable(gl.CULL_FACE);
 
 
+  const uniform_camerapos = gl.getUniformLocation(program, 'cameraPos');
+
+  let cameraPitch = 0.0;
+  let cameraYaw = 0.0;
+  let cameraDist = 10.0;
+
+  const updateCamera = () => {
+    const cameraPos = [
+      cameraDist * Math.cos(cameraPitch) * Math.sin(cameraYaw),
+      cameraDist * Math.sin(cameraPitch),
+      cameraDist * Math.cos(cameraPitch) * Math.cos(cameraYaw),
+    ];
+
+    gl.uniform3fv(uniform_camerapos, cameraPos);
+  };
+
+  canvas.addEventListener('wheel', (e) => {
+    cameraDist += e.deltaY * 0.01;
+    if (cameraDist < 1.0) cameraDist = 1.0;
+    updateCamera();
+    e.preventDefault();
+    return false;
+  });
+
+
+  canvas.addEventListener('mousemove', (e) => {
+    if (e.buttons !== 1) return;
+
+    cameraPitch += e.movementY * 0.01;
+    cameraYaw += e.movementX * 0.01;
+
+    if (cameraPitch > Math.PI / 2) cameraPitch = Math.PI / 2;
+    if (cameraPitch < -Math.PI / 2) cameraPitch = -Math.PI / 2;
+
+    updateCamera();
+  });
+
+  updateCamera();
+
+
+  gl.uniform3f(uniform_resolution, canvas.width, canvas.height, 0);
+
+  let count = 0;
+  let sum = 0;
+
   const draw = () => {
+    const t = performance.now();
     gl.clearColor(0.0, 0.0, 0.0, 1.0);
     gl.clearDepth(1.0);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     gl.drawElements(gl.TRIANGLES, i_count, gl.UNSIGNED_SHORT, 0);
     gl.flush();
+
+    const t2 = performance.now();
+    sum += t2 - t; count += 1;
+    if (count >= 100) {
+      console.log(`render time: ${sum / count} ms`);
+      count = 0; sum = 0;
+    }
     requestAnimationFrame(draw);
   };
   requestAnimationFrame(draw);
