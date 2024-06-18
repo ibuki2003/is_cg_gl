@@ -19,7 +19,7 @@ const float FilmDistance = 3.0;
 
 uniform vec3 cameraPos;
 const vec3 CameraTo = vec3(0.0, 0.0, 0.0);
-const vec3 CameraUp = vec3(0.0, 1.0, 0.0);
+const vec3 CameraUp = vec3(0.0, 0.0, 1.0);
 
 uniform vec3 vertices[1000];
 uniform vec3 normals[1000];

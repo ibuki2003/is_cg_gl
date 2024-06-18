@@ -1,5 +1,11 @@
 import vertexShaderSource from './vertex.glsl?raw';
 import fragmentShaderSource from './fragment.glsl?raw';
+interface Mesh {
+  vertices: Float32Array;
+  normals: Float32Array;
+  indices: Uint16Array;
+}
+
 
 async function main() {
   const canvas = document.getElementById('canvas') as HTMLCanvasElement
@@ -76,53 +82,15 @@ async function main() {
     const uniform_numindices = gl.getUniformLocation(program, 'numIndices');
     const uniform_normals = gl.getUniformLocation(program, 'normals');
 
-    const T = 10;
-    const U = 12;
-    const v = Float32Array.from([
-      0.0, -1.0, 0.0,
-      ...new Array(T * 2 - 1).fill(0).flatMap((_,i) => {
-        let lat = Math.PI * (i - T + 1) / T / 2;
-        return new Array(U).fill(0).flatMap((_,j) => {
-          let lon = Math.PI * 2 * j / U;
-          return [
-            Math.cos(lat) * Math.cos(lon),
-            Math.sin(lat),
-            Math.cos(lat) * Math.sin(lon),
-          ];
-        });
-      }),
-      0.0, 1.0, 0.0,
-    ]);
+    const mesh = await generateMesh_sphere();
 
-    const idx = Uint16Array.from([
-      ...new Array(U).fill(0).flatMap((_,i) => [0, i + 1, (i + 1) % U + 1]),
-      ...new Array(T * 2 - 2).fill(0).flatMap((_,i) => (
-        new Array(U).fill(0).flatMap((_,j) => [
-          i * U + j + 1,
-          i * U + (j + 1) % U + 1,
-          (i + 1) * U + j + 1,
+    const cnt = Math.floor(mesh.indices.length / 3);
 
-          i * U + (j + 1) % U + 1,
-          (i + 1) * U + (j + 1) % U + 1,
-          (i + 1) * U + j + 1,
-        ])
-      )),
-      ...new Array(U).fill(0).flatMap((_,i) => [
-        1 + (T * 2 - 2) * U + i,
-        1 + (T * 2 - 2) * U + (i + 1) % U,
-        (T * 2 - 1) * U + 1,
-      ]),
-    ]);
-
-    const cnt = Math.floor(idx.length / 3);
-
-    gl.uniform3fv(uniform_vertices, v);
-    gl.uniform3fv(uniform_normals, v); // now normals = vertices
-    gl.uniform3uiv(uniform_indices, idx);
+    gl.uniform3fv(uniform_vertices, mesh.vertices);
+    gl.uniform3fv(uniform_normals, mesh.normals);
+    gl.uniform3uiv(uniform_indices, mesh.indices);
     gl.uniform1ui(uniform_numindices, cnt);
     console.log({uniform_vertices, uniform_indices, uniform_numindices});
-    console.log(v);
-    console.log(idx);
     console.log(cnt);
   }
 
@@ -135,8 +103,8 @@ async function main() {
   const updateCamera = () => {
     const cameraPos = [
       cameraDist * Math.cos(cameraPitch) * Math.sin(cameraYaw),
-      cameraDist * Math.sin(cameraPitch),
       cameraDist * Math.cos(cameraPitch) * Math.cos(cameraYaw),
+      cameraDist * Math.sin(cameraPitch),
     ];
 
     gl.uniform3fv(uniform_camerapos, cameraPos);
@@ -155,7 +123,7 @@ async function main() {
     if (e.buttons !== 1) return;
 
     cameraPitch += e.movementY * 0.01;
-    cameraYaw += e.movementX * 0.01;
+    cameraYaw -= e.movementX * 0.01;
 
     if (cameraPitch > Math.PI / 2) cameraPitch = Math.PI / 2;
     if (cameraPitch < -Math.PI / 2) cameraPitch = -Math.PI / 2;
@@ -171,7 +139,14 @@ async function main() {
   let count = 0;
   let sum = 0;
 
+  let fpscnt = 0;
+  setInterval(() => {
+    output.innerText = `${fpscnt} FPS`;
+    fpscnt = 0;
+  }, 1000);
+
   const draw = () => {
+    fpscnt += 1;
     const t = performance.now();
     gl.clearColor(0.0, 0.0, 0.0, 1.0);
     gl.clearDepth(1.0);
@@ -192,3 +167,48 @@ async function main() {
 
 main();
 
+async function generateMesh_sphere(): Promise<Mesh> {
+  const T = 10;
+  const U = 12;
+  const vertices = Float32Array.from([
+    0.0, 0.0, -1.0,
+    ...new Array(T * 2 - 1).fill(0).flatMap((_,i) => {
+      let lat = Math.PI * (i - T + 1) / T / 2;
+      return new Array(U).fill(0).flatMap((_,j) => {
+        let lon = Math.PI * 2 * j / U;
+        return [
+          Math.cos(lat) * Math.cos(lon),
+          Math.cos(lat) * Math.sin(lon),
+          Math.sin(lat),
+        ];
+      });
+    }),
+    0.0, 0.0, 1.0,
+  ]);
+
+  const indices = Uint16Array.from([
+    ...new Array(U).fill(0).flatMap((_,i) => [0, i + 1, (i + 1) % U + 1]),
+    ...new Array(T * 2 - 2).fill(0).flatMap((_,i) => (
+      new Array(U).fill(0).flatMap((_,j) => [
+        i * U + j + 1,
+        i * U + (j + 1) % U + 1,
+        (i + 1) * U + j + 1,
+
+        i * U + (j + 1) % U + 1,
+        (i + 1) * U + (j + 1) % U + 1,
+        (i + 1) * U + j + 1,
+      ])
+    )),
+    ...new Array(U).fill(0).flatMap((_,i) => [
+      1 + (T * 2 - 2) * U + i,
+      1 + (T * 2 - 2) * U + (i + 1) % U,
+      (T * 2 - 1) * U + 1,
+    ]),
+  ]);
+
+  return {
+    vertices,
+    normals: vertices,
+    indices,
+  };
+}
