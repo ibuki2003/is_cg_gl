@@ -21,6 +21,10 @@ uniform vec3 cameraPos;
 const vec3 CameraTo = vec3(0.0, 0.0, 0.0);
 const vec3 CameraUp = vec3(0.0, 1.0, 0.0);
 
+uniform vec3 vertices[1000];
+uniform uvec3 indices[1000];
+uniform uint numIndices;
+
 float LargeFloat() { return 1e+6; }
 
 // 正規直交基底を計算する関数の例
@@ -81,12 +85,69 @@ bool intersectToSphere(
   return false;
 }
 
+bool intersectToTriangle(vec3 a, vec3 b, vec3 c, Ray ray, inout Hit hit) {
+  float t0 = 0.0;
+  t0 += (a.x - b.x) * (a.y - c.y) * (ray.dir.z);
+  t0 += (a.y - b.y) * (a.z - c.z) * (ray.dir.x);
+  t0 += (a.z - b.z) * (a.x - c.x) * (ray.dir.y);
+  t0 -= (a.x - b.x) * (a.z - c.z) * (ray.dir.y);
+  t0 -= (a.y - b.y) * (a.x - c.x) * (ray.dir.z);
+  t0 -= (a.z - b.z) * (a.y - c.y) * (ray.dir.x);
+  if (t0 == 0.0) { return false; }
+
+  float tt = 0.0;
+  tt += (a.x - b.x) * (a.y - c.y) * (a.z - ray.org.z);
+  tt += (a.y - b.y) * (a.z - c.z) * (a.x - ray.org.x);
+  tt += (a.z - b.z) * (a.x - c.x) * (a.y - ray.org.y);
+  tt -= (a.x - b.x) * (a.z - c.z) * (a.y - ray.org.y);
+  tt -= (a.y - b.y) * (a.x - c.x) * (a.z - ray.org.z);
+  tt -= (a.z - b.z) * (a.y - c.y) * (a.x - ray.org.x);
+
+  float tb = 0.0;
+  tb += (a.x - ray.org.x) * (a.y - c.y) * (ray.dir.z);
+  tb += (a.y - ray.org.y) * (a.z - c.z) * (ray.dir.x);
+  tb += (a.z - ray.org.z) * (a.x - c.x) * (ray.dir.y);
+  tb -= (a.x - ray.org.x) * (a.z - c.z) * (ray.dir.y);
+  tb -= (a.y - ray.org.y) * (a.x - c.x) * (ray.dir.z);
+  tb -= (a.z - ray.org.z) * (a.y - c.y) * (ray.dir.x);
+
+  float tc = 0.0;
+  tc += (a.x - b.x) * (a.y - ray.org.y) * (ray.dir.z);
+  tc += (a.y - b.y) * (a.z - ray.org.z) * (ray.dir.x);
+  tc += (a.z - b.z) * (a.x - ray.org.x) * (ray.dir.y);
+  tc -= (a.x - b.x) * (a.z - ray.org.z) * (ray.dir.y);
+  tc -= (a.y - b.y) * (a.x - ray.org.x) * (ray.dir.z);
+  tc -= (a.z - b.z) * (a.y - ray.org.y) * (ray.dir.x);
+
+  float t = tt / t0;
+  float beta = tb / t0;
+  float gamma = tc / t0;
+  float alpha = 1.0 - beta - gamma;
+  if (
+      (t < 0.0 || hit.distanceToHitpoint < t) ||
+      (beta < 0.0 || beta > 1.0) ||
+      (gamma < 0.0 || gamma > 1.0) ||
+      (alpha < 0.0 || alpha > 1.0)
+     ) { return false; }
+
+  hit.distanceToHitpoint = t;
+  hit.normal = normalize(cross(b - a, c - a));
+  if (dot(hit.normal, ray.dir) > 0.0) { hit.normal *= -1.0; }
+  return true;
+}
+
+
 bool intersect(Ray ray, out Hit hit)
 {
   hit.distanceToHitpoint = LargeFloat();
 
-  intersectToSphere(vec3(0.0, 0.0, 0.0), 0.5, ray, hit);
-  intersectToSphere(vec3(0.0, 0.0, 0.5), 0.5, ray, hit);
+  intersectToSphere(vec3(0.0, 0.0, 0.1), 0.1, ray, hit);
+  for (uint i = 0u; i < numIndices; i++) {
+    vec3 a = vertices[indices[i].x];
+    vec3 b = vertices[indices[i].y];
+    vec3 c = vertices[indices[i].z];
+    intersectToTriangle(a, b, c, ray, hit);
+  }
 
   return hit.distanceToHitpoint < LargeFloat();
 }

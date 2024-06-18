@@ -70,6 +70,59 @@ async function main() {
   gl.depthFunc(gl.LEQUAL);
   gl.enable(gl.CULL_FACE);
 
+  {
+    const uniform_vertices = gl.getUniformLocation(program, 'vertices');
+    const uniform_indices = gl.getUniformLocation(program, 'indices');
+    const uniform_numindices = gl.getUniformLocation(program, 'numIndices');
+
+    const T = 10;
+    const U = 12;
+    const v = Float32Array.from([
+      0.0, -1.0, 0.0,
+      ...new Array(T * 2 - 1).fill(0).flatMap((_,i) => {
+        let lat = Math.PI * (i - T + 1) / T / 2;
+        return new Array(U).fill(0).flatMap((_,j) => {
+          let lon = Math.PI * 2 * j / U;
+          return [
+            Math.cos(lat) * Math.cos(lon),
+            Math.sin(lat),
+            Math.cos(lat) * Math.sin(lon),
+          ];
+        });
+      }),
+      0.0, 1.0, 0.0,
+    ]);
+
+    const idx = Uint16Array.from([
+      ...new Array(U).fill(0).flatMap((_,i) => [0, i + 1, (i + 1) % U + 1]),
+      ...new Array(T * 2 - 2).fill(0).flatMap((_,i) => (
+        new Array(U).fill(0).flatMap((_,j) => [
+          i * U + j + 1,
+          i * U + (j + 1) % U + 1,
+          (i + 1) * U + j + 1,
+
+          i * U + (j + 1) % U + 1,
+          (i + 1) * U + (j + 1) % U + 1,
+          (i + 1) * U + j + 1,
+        ])
+      )),
+      ...new Array(U).fill(0).flatMap((_,i) => [
+        1 + (T * 2 - 2) * U + i,
+        1 + (T * 2 - 2) * U + (i + 1) % U,
+        (T * 2 - 1) * U + 1,
+      ]),
+    ]);
+
+    const cnt = Math.floor(idx.length / 3);
+
+    gl.uniform3fv(uniform_vertices, v);
+    gl.uniform3uiv(uniform_indices, idx);
+    gl.uniform1ui(uniform_numindices, cnt);
+    console.log({uniform_vertices, uniform_indices, uniform_numindices});
+    console.log(v);
+    console.log(idx);
+    console.log(cnt);
+  }
 
   const uniform_camerapos = gl.getUniformLocation(program, 'cameraPos');
 
