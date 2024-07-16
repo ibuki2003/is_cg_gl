@@ -8,6 +8,7 @@ source code files are available at links below
 - [m1_spline](wasm/m1_spline/src)
 - [a1_ik](wasm/a1_ik/src)
 - [r1_rt](r1_rt)
+- [i1_filter](i1_filter)
 
 ## License
 
