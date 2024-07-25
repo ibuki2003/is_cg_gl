@@ -8,6 +8,7 @@ members = [
     "common",
     "m0_demo",
     "m1_spline",
+    "m3_implicit",
     "a1_ik",
 ]
 resolver = "2"

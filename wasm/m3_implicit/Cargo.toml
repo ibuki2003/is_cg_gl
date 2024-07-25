@@ -1,0 +1,20 @@
+[package]
+name = "m3_implicit"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+wasm-bindgen = { workspace = true }
+js-sys = { workspace = true }
+nalgebra-glm = { workspace = true }
+console_error_panic_hook = { workspace = true }
+web-sys = { workspace = true, features = ["MouseEvent", "HtmlInputElement", "Event"] }
+common = { path = "../common" }
+half_edge_mesh = "1.1.8"
+cgmath = "0.16.1"
